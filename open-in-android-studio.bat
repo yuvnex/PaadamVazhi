@@ -1,0 +1,3 @@
+@echo off
+echo Opening Whiteboard Android Project in Android Studio...
+start "" "C:\Program Files\Android\Android Studio\bin\studio64.exe" "%~dp0android"
