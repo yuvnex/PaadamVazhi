@@ -14,17 +14,20 @@ import {
   LogOut,
   Layers,
   Info,
+  Clipboard,
 } from 'lucide-react';
 import { generateBoardPDF, renderPageToDataUrl } from '../utils/pdfExport';
 import {
   authenticateWithGoogle,
-  redirectToGoogleOAuth,
   fetchGoogleUserProfile,
   fetchGoogleClassroomCourses,
   uploadPdfToGoogleDrive,
   createClassroomPost,
   getStoredAccessToken,
+  setStoredAccessToken,
+  extractTokenFromText,
 } from '../services/googleClassroom';
+import { Capacitor } from '@capacitor/core';
 
 export const ClassroomSubmitDialog: React.FC = () => {
   const {
@@ -55,6 +58,8 @@ export const ClassroomSubmitDialog: React.FC = () => {
   // Auth / OAuth states
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualInputText, setManualInputText] = useState('');
 
   // Slide previews state
   const [slidePreviews, setSlidePreviews] = useState<string[]>([]);
@@ -99,18 +104,29 @@ export const ClassroomSubmitDialog: React.FC = () => {
     }
   }, [courses, selectedCourseId]);
 
-  // Auto-verify token on mount if stored
+  // Auto-verify token or check clipboard on mount
   useEffect(() => {
     const existingToken = getStoredAccessToken();
     if (existingToken && !isConnected) {
-      handleVerifyToken(existingToken);
+      connectWithToken(existingToken);
+    } else if (!isConnected && typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then((clipText) => {
+        if (clipText) {
+          const token = extractTokenFromText(clipText);
+          if (token) {
+            setManualInputText(clipText);
+            setShowManualInput(true);
+          }
+        }
+      }).catch(() => {});
     }
   }, []);
 
-  const handleVerifyToken = async (token: string) => {
+  const connectWithToken = async (token: string) => {
     setIsAuthenticating(true);
     setAuthError(null);
     try {
+      setStoredAccessToken(token);
       const profile = await fetchGoogleUserProfile(token);
       const liveCourses = await fetchGoogleClassroomCourses(token);
       updateSettings({
@@ -125,47 +141,84 @@ export const ClassroomSubmitDialog: React.FC = () => {
       if (liveCourses.length > 0) {
         setSelectedCourseId(liveCourses[0].id);
       }
+      setShowManualInput(false);
+      setManualInputText('');
     } catch (err: any) {
-      console.warn('Auto token verify notice:', err);
+      console.error('Token Connect Error:', err);
+      setAuthError(err?.message || 'Failed to authenticate with token. Please check the link and try again.');
     } finally {
       setIsAuthenticating(false);
     }
   };
 
-  // Google Sign-In — directly opens Google's account chooser popup
+  // Google Sign-In — opens system browser (Chrome/Brave) so Google displays the user's accounts
   const handleGoogleSignIn = async () => {
     setIsAuthenticating(true);
     setAuthError(null);
+
     try {
       const token = await authenticateWithGoogle();
+
       if (!token) {
-        throw new Error('Google authorization failed to return an access token.');
+        throw new Error('No access token received.');
       }
 
-      // 1. Fetch real Google User Profile
-      const profile = await fetchGoogleUserProfile(token);
-
-      // 2. Fetch all real Google Classroom courses
-      const liveCourses = await fetchGoogleClassroomCourses(token);
-
-      updateSettings({
-        googleClassroom: {
-          isConnected: true,
-          email: profile.email,
-          name: profile.name,
-          avatar: profile.avatar,
-          courses: liveCourses,
-        },
-      });
-
-      if (liveCourses.length > 0) {
-        setSelectedCourseId(liveCourses[0].id);
-      }
+      await connectWithToken(token);
     } catch (err: any) {
-      console.error('Google Sign-In Error:', err);
-      setAuthError(err?.message || 'Failed to authenticate with Google Classroom.');
+      const msg: string = err?.message || '';
+      if (msg.includes('Redirecting to Google Sign-In') || msg.includes('REDIRECT_BROWSER_OPENED')) {
+        // Browser opened with Google account chooser; keep waiting for user to return
+        return;
+      }
+      // Ignore cancellation (user closed the sign-in dialog)
+      if (msg.includes('cancelled') || msg.includes('canceled')) {
+        // silently reset
+      } else {
+        console.error('Google Sign-In Error:', err);
+        setAuthError(msg || 'Failed to authenticate with Google Classroom.');
+      }
     } finally {
-      setIsAuthenticating(false);
+      if (!Capacitor.isNativePlatform()) {
+        setIsAuthenticating(false);
+      }
+    }
+  };
+
+  const handleManualConnect = async () => {
+    if (!manualInputText.trim()) {
+      setAuthError('Please paste the redirect URL or access token.');
+      return;
+    }
+    const token = extractTokenFromText(manualInputText);
+    if (!token) {
+      setAuthError('Could not find a valid access_token in the text. Copy the full URL from the browser address bar.');
+      return;
+    }
+    await connectWithToken(token);
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      let text = '';
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+      if (text) {
+        const token = extractTokenFromText(text);
+        if (token) {
+          setManualInputText(text);
+          await connectWithToken(token);
+          return;
+        }
+      }
+      setShowManualInput(true);
+      if (!text) {
+        setAuthError('Clipboard is empty. Copy the URL from your Chrome address bar and paste it below.');
+      } else {
+        setAuthError('Could not find access token in clipboard. Please paste the full URL from Chrome below.');
+      }
+    } catch {
+      setShowManualInput(true);
     }
   };
 
@@ -462,7 +515,7 @@ export const ClassroomSubmitDialog: React.FC = () => {
                 {isAuthenticating ? (
                   <>
                     <Loader2 size={18} className="animate-spin" color="#1a73e8" />
-                    <span>Connecting to Google...</span>
+                    <span>Sign-in browser opened… waiting</span>
                   </>
                 ) : (
                   <>
@@ -489,35 +542,117 @@ export const ClassroomSubmitDialog: React.FC = () => {
                 )}
               </button>
 
-              {/* Direct Redirect Option (Guaranteed to work on IFP/Smart TV/Android tabbed browsers) */}
-              <button
-                onClick={() => redirectToGoogleOAuth()}
-                style={{
-                  background: 'transparent',
-                  border: '1px dashed #4b5563',
-                  borderRadius: '6px',
-                  color: '#93c5fd',
+              {/* Informational note shown while waiting for user to complete sign-in */}
+              {isAuthenticating && (
+                <div style={{
                   fontSize: '11px',
-                  padding: '5px 12px',
-                  cursor: 'pointer',
+                  color: '#6b7280',
+                  textAlign: 'center',
+                  padding: '4px 8px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#60a5fa';
-                  e.currentTarget.style.color = '#bfdbfe';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#4b5563';
-                  e.currentTarget.style.color = '#93c5fd';
-                }}
-                title="Use if popup is blocked or hangs on a blank screen"
-              >
-                <ExternalLink size={12} />
-                <span>Stuck on blank screen? Use Direct Sign-In</span>
-              </button>
+                }}>
+                  <Info size={12} color="#6b7280" />
+                  Complete sign-in in the browser that opened. This screen will update automatically.
+                </div>
+              )}
+
+              {/* One-tap Paste from Clipboard & Manual Input Option */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%', marginTop: '4px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={handlePasteFromClipboard}
+                    disabled={isAuthenticating}
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.15)',
+                      border: '1px solid #3b82f6',
+                      color: '#93c5fd',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: isAuthenticating ? 'wait' : 'pointer',
+                      padding: '6px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title="If you saw 'localhost refused to connect' in Chrome, copy that URL and click here"
+                  >
+                    <Clipboard size={14} />
+                    <span>Paste Link from Chrome & Connect</span>
+                  </button>
+                  <button
+                    onClick={() => setShowManualInput(!showManualInput)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#9ca3af',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      padding: '4px 6px',
+                    }}
+                  >
+                    {showManualInput ? 'Hide manual box' : 'Enter URL manually'}
+                  </button>
+                </div>
+
+                {showManualInput && (
+                  <div
+                    style={{
+                      width: '100%',
+                      background: '#191a1d',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      marginTop: '4px',
+                    }}
+                  >
+                    <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'left', lineHeight: '1.4' }}>
+                      If Chrome shows <strong>"localhost refused to connect"</strong>, copy the full URL from Chrome's top address bar and paste it below:
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        placeholder="Paste localhost URL or ya29... token here"
+                        value={manualInputText}
+                        onChange={(e) => setManualInputText(e.target.value)}
+                        style={{
+                          flex: 1,
+                          background: '#26282d',
+                          border: '1px solid #4b5563',
+                          borderRadius: '6px',
+                          padding: '8px 10px',
+                          color: '#ffffff',
+                          fontSize: '12px',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        onClick={handleManualConnect}
+                        disabled={isAuthenticating}
+                        style={{
+                          background: '#1a73e8',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '8px 14px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: isAuthenticating ? 'wait' : 'pointer',
+                        }}
+                      >
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ marginTop: '8px', borderTop: '1px solid #35373c', paddingTop: '16px', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

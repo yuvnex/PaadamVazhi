@@ -24,7 +24,7 @@ if %errorlevel% neq 0 (
 )
 
 :: Ensure OneDrive reparse points are converted to regular local files for Gradle
-powershell -NoProfile -Command "Get-ChildItem -Recurse -File 'android\app\src\main\assets' | ForEach-Object { $b = [System.IO.File]::ReadAllBytes($_.FullName); [System.IO.File]::WriteAllBytes($_.FullName, $b) }" 2>nul
+powershell -NoProfile -Command "Get-ChildItem -Recurse -File 'android\app\src\main\assets' | ForEach-Object { $t = [System.IO.Path]::GetTempFileName(); [System.IO.File]::Copy($_.FullName, $t, $true); [System.IO.File]::Delete($_.FullName); [System.IO.File]::Copy($t, $_.FullName); [System.IO.File]::Delete($t) }" 2>nul
 
 
 echo.
@@ -50,10 +50,19 @@ if %BUILD_STATUS% neq 0 (
     exit /b 1
 )
 
+:: Copy newly compiled APK from temp build directory to project output locations
+if exist "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" (
+    if not exist "android\app\build\outputs\apk\debug" mkdir "android\app\build\outputs\apk\debug"
+    copy /y "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" "android\app\build\outputs\apk\debug\app-debug.apk" >nul
+    copy /y "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" "app-debug.apk" >nul
+)
+
 echo.
 echo ========================================================
 echo   BUILD SUCCESSFUL!
-echo   APK File Location:
-echo   android\app\build\outputs\apk\debug\app-debug.apk
+echo   Fresh APK has been saved to:
+echo     1) app-debug.apk  (in this root folder)
+echo     2) android\app\build\outputs\apk\debug\app-debug.apk
 echo ========================================================
+explorer /select,"app-debug.apk"
 pause

@@ -57,8 +57,37 @@ export function setStoredClientId(clientId: string) {
   localStorage.setItem(STORAGE_KEY_CLIENT_ID, clientId.trim());
 }
 
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+
+export interface OAuthBridgePluginInterface {
+  startReceiver(): Promise<{ port: number; ready: boolean }>;
+  stopReceiver(): Promise<void>;
+  addListener(
+    eventName: 'onTokenReceived',
+    listenerFunc: (data: { accessToken: string }) => void
+  ): Promise<{ remove: () => Promise<void> }>;
+}
+
+export const NativeOAuthBridge = registerPlugin<OAuthBridgePluginInterface>('OAuthBridgePlugin');
+
+export function extractTokenFromText(input: string): string | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (trimmed.startsWith('ya29.')) {
+    const end = trimmed.search(/[&\s#]/);
+    return end === -1 ? trimmed : trimmed.substring(0, end);
+  }
+  const match = trimmed.match(/access_token=([^&\s#]+)/);
+  if (match && match[1]) {
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  return null;
+}
 
 export function isMobileDevice(): boolean {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
@@ -71,9 +100,9 @@ export function isMobileDevice(): boolean {
 
 export function getGoogleOAuthUrl(clientId?: string): string {
   const activeClientId = clientId || getStoredClientId();
-  const origin = window.location.origin;
-  const pathname = window.location.pathname === '/' ? '' : window.location.pathname.replace(/\/$/, '');
-  const redirectUri = origin + pathname;
+  // On native Android, use loopback port 8080 served by OAuthBridgePlugin.
+  // On desktop web, use https://localhost.
+  const redirectUri = Capacitor.isNativePlatform() ? 'http://localhost:8080' : 'https://localhost';
 
   return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(
     activeClientId
@@ -87,10 +116,17 @@ export function getGoogleOAuthUrl(clientId?: string): string {
 export async function redirectToGoogleOAuth(clientId?: string) {
   const activeClientId = clientId || getStoredClientId();
   setStoredClientId(activeClientId);
-  const url = getGoogleOAuthUrl(activeClientId);
 
   if (Capacitor.isNativePlatform()) {
-    // Opens Chrome Custom Tabs inside the app for seamless login & auto-return
+    try {
+      await NativeOAuthBridge.startReceiver();
+    } catch (e) {
+      console.warn('Loopback server notice:', e);
+    }
+  }
+
+  const url = getGoogleOAuthUrl(activeClientId);
+  if (Capacitor.isNativePlatform()) {
     try {
       await Browser.open({ url });
     } catch {
@@ -103,8 +139,10 @@ export async function redirectToGoogleOAuth(clientId?: string) {
 
 /**
  * Triggers Google OAuth 2.0 Sign-in.
- * On mobile/Android/iOS/Capacitor, it uses direct top-level redirect to prevent the GIS popup blank screen bug.
- * On desktop, it attempts GIS token client popup with direct popup fallback.
+ * On Native Capacitor Android: starts embedded loopback receiver on localhost:8080,
+ * opens system browser so Google shows the native "Choose an account" screen,
+ * and automatically captures the redirected token without ANY manual copy/paste!
+ * On desktop: uses GIS popup or direct popup fallback.
  */
 export async function authenticateWithGoogle(clientId?: string): Promise<string> {
   const activeClientId = clientId || getStoredClientId();
@@ -114,16 +152,67 @@ export async function authenticateWithGoogle(clientId?: string): Promise<string>
 
   setStoredClientId(activeClientId);
 
-  // On mobile browsers and native apps, GIS popups open as detached tabs that freeze on a blank accounts.google.com screen.
-  // Direct redirect is the standard and reliable OAuth flow on mobile.
-  if (isMobileDevice()) {
-    await redirectToGoogleOAuth(activeClientId);
-    return new Promise((_, reject) => {
+  // 1. Native Capacitor Android: 100% Automatic Loopback Receiver
+  if (Capacitor.isNativePlatform()) {
+    return new Promise(async (resolve, reject) => {
+      let resolved = false;
+
+      let bridgeHandle: any = null;
+      try {
+        bridgeHandle = await NativeOAuthBridge.addListener('onTokenReceived', async (data) => {
+          if (!resolved && data?.accessToken) {
+            resolved = true;
+            try { await Browser.close(); } catch {}
+            try { await NativeOAuthBridge.stopReceiver(); } catch {}
+            if (bridgeHandle && bridgeHandle.remove) bridgeHandle.remove();
+            setStoredAccessToken(data.accessToken);
+            resolve(data.accessToken);
+          }
+        });
+      } catch (err) {
+        console.warn('Bridge listener notice:', err);
+      }
+
+      // Secondary backup: deep link listener
+      let appUrlHandle: any = null;
+      try {
+        const { App: CapApp } = await import('@capacitor/app');
+        appUrlHandle = await CapApp.addListener('appUrlOpen', async (event) => {
+          if (!resolved && event?.url) {
+            const token = extractTokenFromText(event.url);
+            if (token) {
+              resolved = true;
+              try { await Browser.close(); } catch {}
+              try { await NativeOAuthBridge.stopReceiver(); } catch {}
+              if (appUrlHandle && appUrlHandle.remove) appUrlHandle.remove();
+              if (bridgeHandle && bridgeHandle.remove) bridgeHandle.remove();
+              setStoredAccessToken(token);
+              resolve(token);
+            }
+          }
+        });
+      } catch {}
+
+      try {
+        await redirectToGoogleOAuth(activeClientId);
+      } catch (e: any) {
+        if (!resolved) {
+          resolved = true;
+          reject(e);
+        }
+      }
+
+      // Safety timeout: 3 minutes
       setTimeout(() => {
-        reject(new Error('Redirecting to Google Sign-In... Please complete sign-in in your browser.'));
-      }, 5000);
+        if (!resolved) {
+          resolved = true;
+          try { NativeOAuthBridge.stopReceiver(); } catch {}
+          reject(new Error('Sign-in timed out. Please try again.'));
+        }
+      }, 180000);
     });
   }
+
 
   return new Promise((resolve, reject) => {
     let resolved = false;
@@ -268,6 +357,20 @@ export async function fetchGoogleClassroomCourses(accessToken: string): Promise<
     if (res.ok) {
       const data = await res.json();
       rawCourses = data.courses || [];
+      // If no teacher courses found, also check courses where user is enrolled as a student
+      if (rawCourses.length === 0) {
+        try {
+          const studentRes = await fetch('https://classroom.googleapis.com/v1/courses?studentId=me&courseStates=ACTIVE', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (studentRes.ok) {
+            const sData = await studentRes.json();
+            if (sData.courses && sData.courses.length > 0) {
+              rawCourses = sData.courses;
+            }
+          }
+        } catch {}
+      }
     } else if (res.status === 401) {
       setStoredAccessToken(null);
       throw new Error('Google session expired. Please sign in again.');
@@ -282,8 +385,18 @@ export async function fetchGoogleClassroomCourses(accessToken: string): Promise<
         const teacherData = await teacherRes.json();
         rawCourses = teacherData.courses || [];
       } else {
-        const errJson = await teacherRes.json().catch(() => ({}));
-        throw new Error(errJson?.error?.message || `Google Classroom API error (${teacherRes.status})`);
+        const studentRes = await fetch('https://classroom.googleapis.com/v1/courses?studentId=me', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        if (studentRes.ok) {
+          const sData = await studentRes.json();
+          rawCourses = sData.courses || [];
+        } else {
+          const errJson = await teacherRes.json().catch(() => ({}));
+          throw new Error(errJson?.error?.message || `Google Classroom API error (${teacherRes.status})`);
+        }
       }
     }
   } catch (err: any) {

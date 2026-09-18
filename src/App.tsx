@@ -35,46 +35,50 @@ function App() {
 
   useEffect(() => {
     const handleAccessToken = async (rawUrl: string) => {
-      if (rawUrl.includes('access_token=')) {
+      if (!rawUrl) return;
+
+      try {
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.close();
+      } catch {}
+
+      const module = await import('./services/googleClassroom');
+      const token = module.extractTokenFromText(rawUrl);
+      if (!token) return;
+
+      module.setStoredAccessToken(token);
+
+      try {
+        const profile = await module.fetchGoogleUserProfile(token);
+        let courses: any[] = [];
         try {
-          const { Browser } = await import('@capacitor/browser');
-          await Browser.close();
-        } catch {}
-
-        const hash = rawUrl.includes('#') ? rawUrl.split('#')[1] : rawUrl.split('?')[1] || '';
-        const params = new URLSearchParams(hash);
-        const token = params.get('access_token');
-        if (token) {
-          const module = await import('./services/googleClassroom');
-          module.setStoredAccessToken(token);
-          try {
-            const profile = await module.fetchGoogleUserProfile(token);
-            let courses: any[] = [];
-            try {
-              courses = await module.fetchGoogleClassroomCourses(token);
-            } catch (cErr) {
-              console.warn('Classroom courses fetch warning:', cErr);
-            }
-
-            useWhiteboardStore.getState().updateSettings({
-              googleClassroom: {
-                isConnected: true,
-                email: profile.email,
-                name: profile.name,
-                avatar: profile.avatar,
-                courses,
-              },
-            });
-            useWhiteboardStore.getState().setShowClassroomSubmitDialog(true);
-          } catch (e) {
-            console.error('Failed to parse OAuth redirect profile:', e);
-          }
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          courses = await module.fetchGoogleClassroomCourses(token);
+        } catch (cErr) {
+          console.warn('Classroom courses fetch warning:', cErr);
         }
+
+        useWhiteboardStore.getState().updateSettings({
+          googleClassroom: {
+            isConnected: true,
+            email: profile.email,
+            name: profile.name,
+            avatar: profile.avatar,
+            courses,
+          },
+        });
+        // Open the classroom dialog to show the connected + courses view
+        useWhiteboardStore.getState().setShowClassroomSubmitDialog(true);
+      } catch (e) {
+        console.error('Failed to load Google Classroom profile after redirect:', e);
+      }
+
+      // Clean up the URL if it's a web URL
+      if (rawUrl.startsWith('http') && window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
       }
     };
 
-    // 1. Check if returning from web browser OAuth redirect
+    // 1. Check if already on page with access_token in hash (web redirect)
     if (window.location.hash.includes('access_token=')) {
       handleAccessToken(window.location.href);
     }
@@ -94,8 +98,16 @@ function App() {
       };
 
       const statePromise = CapApp.addListener('appStateChange', (state) => {
-        if (state.isActive && window.location.hash.includes('access_token=')) {
-          handleAccessToken(window.location.href);
+        if (state.isActive) {
+          if (window.location.hash.includes('access_token=')) {
+            handleAccessToken(window.location.href);
+          } else if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+            navigator.clipboard.readText().then((clipText) => {
+              if (clipText && (clipText.includes('access_token=') || clipText.startsWith('ya29.'))) {
+                handleAccessToken(clipText);
+              }
+            }).catch(() => {});
+          }
         }
       });
       removeStateListener = () => {
