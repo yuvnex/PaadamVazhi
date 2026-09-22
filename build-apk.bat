@@ -53,8 +53,11 @@ if %BUILD_STATUS% neq 0 (
 :: Copy newly compiled APK from temp build directory to project output locations
 if exist "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" (
     if not exist "android\app\build\outputs\apk\debug" mkdir "android\app\build\outputs\apk\debug"
+    if not exist "build-output" mkdir "build-output"
     copy /y "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" "android\app\build\outputs\apk\debug\app-debug.apk" >nul
     copy /y "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" "app-debug.apk" >nul
+    copy /y "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" "PaadamVazhi.apk" >nul
+    copy /y "%TEMP%\whiteboard-build\app\outputs\apk\debug\app-debug.apk" "build-output\PaadamVazhi.apk" >nul
 )
 
 echo.
