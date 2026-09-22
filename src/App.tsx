@@ -7,7 +7,6 @@ import ShapeMenu from './components/ShapeMenu';
 import InsertMenu from './components/InsertMenu';
 import PageNavigation from './components/PageNavigation';
 import MainMenu from './components/MainMenu';
-import Clock from './components/Clock';
 import SettingsDialog from './components/SettingsDialog';
 import ExportDialog from './components/ExportDialog';
 import PageOverview from './components/PageOverview';
@@ -15,6 +14,9 @@ import ZoomControls from './components/ZoomControls';
 import BackgroundPicker from './components/BackgroundPicker';
 import ClassroomSubmitDialog from './components/ClassroomSubmitDialog';
 import SplashScreen from './components/SplashScreen';
+import PeriodStatusBar from './components/PeriodStatusBar';
+import PeriodClassroomModal from './components/PeriodClassroomModal';
+import { usePeriodScheduler } from './hooks/usePeriodScheduler';
 import { useWhiteboardStore } from './store/useStore';
 
 function App() {
@@ -28,7 +30,11 @@ function App() {
     showExportDialog,
     showPageOverview,
     showClassroomSubmitDialog,
+    showPeriodClassroomModal,
   } = useWhiteboardStore();
+
+  // Run period scheduler to detect period boundaries and auto-trigger workflow
+  usePeriodScheduler();
 
   // Track whether a toolbar/popup button was recently clicked
   const toolbarClickRef = useRef(false);
@@ -161,7 +167,7 @@ function App() {
       userSelect: 'none',
     }}>
       <Canvas />
-      <Clock />
+      <PeriodStatusBar />
       <PageNavigation />
       <BackgroundPicker />
       <Toolbar />
@@ -176,6 +182,7 @@ function App() {
       {showExportDialog && <ExportDialog />}
       {showPageOverview && <PageOverview />}
       {showClassroomSubmitDialog && <ClassroomSubmitDialog />}
+      {showPeriodClassroomModal && <PeriodClassroomModal />}
       <SplashScreen durationMs={2600} />
     </div>
   );

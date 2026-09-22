@@ -11,11 +11,17 @@ import type {
   Board,
   HistoryEntry,
   Settings,
+  ClassroomCourse,
+  PeriodUploadStatus,
+  PeriodSessionState,
 } from '../types';
 import {
   DEFAULT_SETTINGS,
   DEFAULT_CLASSROOM_COURSES,
 } from '../types';
+import type { PeriodSlot } from '../utils/periodSchedule';
+import { formatPeriodNumbers } from '../utils/periodSchedule';
+import { uploadPeriodNotesToClassroom } from '../services/periodUploadService';
 
 interface WhiteboardState {
   // Board
@@ -50,6 +56,14 @@ interface WhiteboardState {
   showPageOverview: boolean;
   showExportDialog: boolean;
   showClassroomSubmitDialog: boolean;
+  
+  // Period Schedule & Classroom Workflow
+  periodSlot: PeriodSlot | null;
+  periodSession: PeriodSessionState;
+  showPeriodClassroomModal: boolean;
+  periodUploadStatus: PeriodUploadStatus;
+  lastHandledPeriodId: string | null;
+  simulationTimeOffsetMs: number;
   
   // Settings
   settings: Settings;
@@ -93,6 +107,13 @@ interface WhiteboardState {
   setShowPageOverview: (show: boolean) => void;
   setShowExportDialog: (show: boolean) => void;
   setShowClassroomSubmitDialog: (show: boolean) => void;
+  setShowPeriodClassroomModal: (show: boolean) => void;
+  setPeriodSlot: (slot: PeriodSlot | null) => void;
+  setPeriodUploadStatus: (status: PeriodUploadStatus) => void;
+  setSimulationTimeOffsetMs: (offsetMs: number) => void;
+  selectPeriodClassroom: (course: ClassroomCourse, slot: PeriodSlot) => Promise<void>;
+  autoUploadCurrentPeriodSession: (reason?: string) => Promise<void>;
+  dismissPeriodModal: () => void;
   
   // Classroom actions
   connectGoogleClassroom: (email: string, name?: string) => void;
@@ -153,6 +174,22 @@ export const useWhiteboardStore = create<WhiteboardState>((set, get) => ({
   showPageOverview: false,
   showExportDialog: false,
   showClassroomSubmitDialog: false,
+  
+  // Period Schedule & Classroom Workflow
+  periodSlot: null,
+  periodSession: {
+    currentPeriodNumber: null,
+    currentPeriodId: null,
+    activeCourse: null,
+    accumulatedPeriods: [],
+    startedAt: null,
+  },
+  showPeriodClassroomModal: false,
+  periodUploadStatus: {
+    state: 'idle',
+  },
+  lastHandledPeriodId: null,
+  simulationTimeOffsetMs: 0,
   
   settings: DEFAULT_SETTINGS,
   
@@ -339,6 +376,145 @@ export const useWhiteboardStore = create<WhiteboardState>((set, get) => ({
   setShowPageOverview: (show) => set({ showPageOverview: show }),
   setShowExportDialog: (show) => set({ showExportDialog: show }),
   setShowClassroomSubmitDialog: (show) => set({ showClassroomSubmitDialog: show }),
+  setShowPeriodClassroomModal: (show) => set({ showPeriodClassroomModal: show }),
+  setPeriodSlot: (slot) => set({ periodSlot: slot }),
+  setPeriodUploadStatus: (status) => set({ periodUploadStatus: status }),
+  setSimulationTimeOffsetMs: (offsetMs) => set({ simulationTimeOffsetMs: offsetMs }),
+  dismissPeriodModal: () => set({ showPeriodClassroomModal: false }),
+
+  selectPeriodClassroom: async (course: ClassroomCourse, slot: PeriodSlot) => {
+    const state = get();
+    const currentSession = state.periodSession;
+    const isSameCourse = currentSession.activeCourse?.id === course.id;
+    const periodNum = slot.periodNumber || 1;
+
+    if (isSameCourse && currentSession.activeCourse) {
+      // Consecutive period with the same classroom!
+      // Requirement 4: Continue accumulating notes, keep same classroom, do NOT upload.
+      const newAccumulated = currentSession.accumulatedPeriods.includes(periodNum)
+        ? currentSession.accumulatedPeriods
+        : [...currentSession.accumulatedPeriods, periodNum].sort((a, b) => a - b);
+
+      set({
+        periodSlot: slot,
+        periodSession: {
+          ...currentSession,
+          currentPeriodNumber: periodNum,
+          currentPeriodId: slot.id,
+          accumulatedPeriods: newAccumulated,
+        },
+        lastHandledPeriodId: slot.id,
+        showPeriodClassroomModal: false,
+      });
+      return;
+    }
+
+    // If there was an active course with notes previously, auto-upload the accumulated notes for that previous course
+    if (currentSession.activeCourse && currentSession.accumulatedPeriods.length > 0) {
+      await state.autoUploadCurrentPeriodSession('classroom_changed');
+    }
+
+    // Start tracking notes for this new period
+    set({
+      periodSlot: slot,
+      periodSession: {
+        currentPeriodNumber: periodNum,
+        currentPeriodId: slot.id,
+        activeCourse: course,
+        accumulatedPeriods: [periodNum],
+        startedAt: Date.now(),
+      },
+      lastHandledPeriodId: slot.id,
+      showPeriodClassroomModal: false,
+    });
+  },
+
+  autoUploadCurrentPeriodSession: async () => {
+    const state = get();
+    const session = state.periodSession;
+    if (!session.activeCourse || session.accumulatedPeriods.length === 0) {
+      return;
+    }
+
+    const courseToUpload = session.activeCourse;
+    const periodsToUpload = [...session.accumulatedPeriods];
+    const periodLabel = formatPeriodNumbers(periodsToUpload);
+    const boardSnapshot = state.board;
+
+    set({
+      periodUploadStatus: {
+        state: 'generating',
+        message: `Packaging notes for ${courseToUpload.name}...`,
+        courseName: courseToUpload.name,
+        periodLabel,
+        timestamp: Date.now(),
+      },
+    });
+
+    const res = await uploadPeriodNotesToClassroom({
+      board: boardSnapshot,
+      settings: state.settings,
+      course: courseToUpload,
+      periodNumbers: periodsToUpload,
+      onProgress: (phase, msg) => {
+        set({
+          periodUploadStatus: {
+            state: phase === 'posting' ? 'uploading' : phase,
+            message: msg,
+            courseName: courseToUpload.name,
+            periodLabel,
+            timestamp: Date.now(),
+          },
+        });
+      },
+    });
+
+    if (res.success) {
+      if (res.skippedEmpty) {
+        set({
+          periodUploadStatus: {
+            state: 'idle',
+            message: `Whiteboard was empty for ${periodLabel}; upload skipped.`,
+            timestamp: Date.now(),
+          },
+        });
+      } else {
+        set({
+          periodUploadStatus: {
+            state: 'success',
+            message: `Notes for ${periodLabel} successfully published to ${courseToUpload.name}!`,
+            courseName: courseToUpload.name,
+            periodLabel,
+            postLink: res.postLink,
+            timestamp: Date.now(),
+          },
+        });
+        // Create fresh whiteboard for next period
+        get().newBoard();
+      }
+    } else {
+      set({
+        periodUploadStatus: {
+          state: 'error',
+          message: res.error || 'Auto-upload to Google Classroom failed.',
+          courseName: courseToUpload.name,
+          periodLabel,
+          timestamp: Date.now(),
+        },
+      });
+    }
+
+    // Reset current period session tracking
+    set({
+      periodSession: {
+        currentPeriodNumber: null,
+        currentPeriodId: null,
+        activeCourse: null,
+        accumulatedPeriods: [],
+        startedAt: null,
+      },
+    });
+  },
   
   connectGoogleClassroom: (email: string, name?: string) => {
     set((state) => ({

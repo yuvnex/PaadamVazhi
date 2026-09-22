@@ -167,4 +167,19 @@ export const DEFAULT_SETTINGS: Settings = {
     courses: [],
   },
 };
+export interface PeriodUploadStatus {
+  state: 'idle' | 'generating' | 'uploading' | 'success' | 'error';
+  message?: string;
+  courseName?: string;
+  periodLabel?: string;
+  timestamp?: number;
+  postLink?: string;
+}
 
+export interface PeriodSessionState {
+  currentPeriodNumber: number | null;
+  currentPeriodId: string | null;
+  activeCourse: ClassroomCourse | null;
+  accumulatedPeriods: number[];
+  startedAt: number | null;
+}
