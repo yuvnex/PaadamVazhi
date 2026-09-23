@@ -54,15 +54,16 @@ const ShapeMenu: React.FC = () => {
       bottom: '80px',
       left: '50%',
       transform: 'translateX(-50%)',
-      background: '#2a2b2e',
-      border: '1px solid #444',
-      borderRadius: '12px',
+      background: 'rgba(24, 27, 34, 0.98)',
+      border: '1px solid rgba(255, 255, 255, 0.14)',
+      borderRadius: '14px',
       padding: '12px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)',
+      backdropFilter: 'blur(20px)',
       zIndex: 200,
       minWidth: '200px',
     }}>
-      <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '8px', fontWeight: 500 }}>Shapes</div>
+      <div style={{ color: '#94a3b8', fontSize: '11px', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Shapes</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px' }}>
         {shapes.map((shape) => (
           <button
@@ -75,8 +76,8 @@ const ShapeMenu: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: shapeType === shape.id ? '#3a3b3e' : 'transparent',
-              border: shapeType === shape.id ? '1px solid #4A90D9' : '1px solid transparent',
+              background: shapeType === shape.id ? 'rgba(56, 189, 248, 0.16)' : 'transparent',
+              border: shapeType === shape.id ? '1px solid #38bdf8' : '1px solid transparent',
               borderRadius: '8px',
               cursor: 'pointer',
               outline: 'none',

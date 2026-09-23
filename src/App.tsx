@@ -11,7 +11,6 @@ import SettingsDialog from './components/SettingsDialog';
 import ExportDialog from './components/ExportDialog';
 import PageOverview from './components/PageOverview';
 import ZoomControls from './components/ZoomControls';
-import BackgroundPicker from './components/BackgroundPicker';
 import ClassroomSubmitDialog from './components/ClassroomSubmitDialog';
 import SplashScreen from './components/SplashScreen';
 import PeriodStatusBar from './components/PeriodStatusBar';
@@ -21,6 +20,8 @@ import { useWhiteboardStore } from './store/useStore';
 
 function App() {
   const {
+    board,
+    currentPageIndex,
     showPenSettings,
     showEraserSettings,
     showShapeMenu,
@@ -157,19 +158,20 @@ function App() {
     };
   }, []);
 
+  const currentBgColor = board.pages[currentPageIndex]?.backgroundColor || '#121316';
+
   return (
     <div style={{
       width: '100vw',
       height: '100vh',
       overflow: 'hidden',
-      background: '#292A2E',
+      background: currentBgColor,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       userSelect: 'none',
     }}>
       <Canvas />
       <PeriodStatusBar />
       <PageNavigation />
-      <BackgroundPicker />
       <Toolbar />
       <ZoomControls />
       

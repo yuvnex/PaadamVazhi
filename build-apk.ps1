@@ -20,12 +20,11 @@ if ($LASTEXITCODE -ne 0) {
 
 # Ensure OneDrive reparse points are converted to regular local files for Gradle
 Get-ChildItem -Recurse -File "android\app\src\main\assets" | ForEach-Object {
-    $t = [System.IO.Path]::GetTempFileName()
-    [System.IO.File]::Copy($_.FullName, $t, $true)
+    $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
     [System.IO.File]::Delete($_.FullName)
-    [System.IO.File]::Copy($t, $_.FullName)
-    [System.IO.File]::Delete($t)
+    [System.IO.File]::WriteAllBytes($_.FullName, $bytes)
 }
+attrib -P -U /S "android\app\src\main\assets\*" 2>$null
 
 
 Write-Host ""

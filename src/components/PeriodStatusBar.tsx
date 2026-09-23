@@ -87,40 +87,35 @@ export const PeriodStatusBar: React.FC = () => {
               borderRadius: '20px',
               fontSize: '12px',
               fontWeight: 500,
-              background:
-                periodUploadStatus.state === 'success'
-                  ? 'rgba(34, 197, 94, 0.2)'
-                  : periodUploadStatus.state === 'error'
-                  ? 'rgba(239, 68, 68, 0.2)'
-                  : 'rgba(59, 130, 246, 0.2)',
+              background: 'rgba(24, 27, 34, 0.96)',
               border:
                 periodUploadStatus.state === 'success'
-                  ? '1px solid rgba(34, 197, 94, 0.4)'
+                  ? '1px solid rgba(82, 183, 136, 0.35)'
                   : periodUploadStatus.state === 'error'
-                  ? '1px solid rgba(239, 68, 68, 0.4)'
-                  : '1px solid rgba(59, 130, 246, 0.4)',
+                  ? '1px solid rgba(239, 68, 68, 0.35)'
+                  : '1px solid rgba(255, 255, 255, 0.15)',
               color:
                 periodUploadStatus.state === 'success'
-                  ? '#4ade80'
+                  ? '#e2e8f0'
                   : periodUploadStatus.state === 'error'
-                  ? '#f87171'
-                  : '#60a5fa',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.3)',
-              backdropFilter: 'blur(8px)',
+                  ? '#fca5a5'
+                  : '#cbd5e1',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+              backdropFilter: 'blur(16px)',
               animation: 'fadeIn 0.2s ease-out',
             }}
           >
-            {periodUploadStatus.state === 'generating' && <Loader2 size={13} className="animate-spin" />}
-            {periodUploadStatus.state === 'uploading' && <Loader2 size={13} className="animate-spin" />}
-            {periodUploadStatus.state === 'success' && <CheckCircle2 size={14} />}
-            {periodUploadStatus.state === 'error' && <AlertCircle size={14} />}
+            {periodUploadStatus.state === 'generating' && <Loader2 size={13} className="animate-spin" color="#cbd5e1" />}
+            {periodUploadStatus.state === 'uploading' && <Loader2 size={13} className="animate-spin" color="#cbd5e1" />}
+            {periodUploadStatus.state === 'success' && <CheckCircle2 size={14} color="#52b788" />}
+            {periodUploadStatus.state === 'error' && <AlertCircle size={14} color="#f87171" />}
             <span>{periodUploadStatus.message}</span>
             {periodUploadStatus.postLink && (
               <a
                 href={periodUploadStatus.postLink}
                 target="_blank"
                 rel="noreferrer"
-                style={{ color: '#fff', marginLeft: '4px', textDecoration: 'underline', display: 'flex', alignItems: 'center' }}
+                style={{ color: '#e2e8f0', marginLeft: '4px', textDecoration: 'underline', display: 'flex', alignItems: 'center' }}
               >
                 <ExternalLink size={12} />
               </a>
@@ -155,22 +150,21 @@ export const PeriodStatusBar: React.FC = () => {
             e.currentTarget.style.background = 'rgba(33, 35, 41, 0.88)';
           }}
         >
-          {/* Status icon / dot */}
+          {/* Status icon / dot - clean matte dot without neon glow */}
           {scheduleInfo.status === 'in_period' ? (
             <span
               style={{
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                backgroundColor: '#22c55e',
-                boxShadow: '0 0 8px #22c55e',
+                backgroundColor: '#52b788',
                 display: 'inline-block',
               }}
             />
           ) : scheduleInfo.status === 'in_break' ? (
-            <Coffee size={13} style={{ color: '#f59e0b' }} />
+            <Coffee size={13} style={{ color: '#d97706' }} />
           ) : scheduleInfo.status === 'in_lunch' ? (
-            <Utensils size={13} style={{ color: '#f59e0b' }} />
+            <Utensils size={13} style={{ color: '#d97706' }} />
           ) : (
             <Moon size={13} style={{ color: '#94a3b8' }} />
           )}
@@ -188,10 +182,11 @@ export const PeriodStatusBar: React.FC = () => {
               style={{
                 fontSize: '11px',
                 fontWeight: 600,
-                color: '#fff',
-                backgroundColor: activeCourse.color || '#1a73e8',
+                color: '#f1f5f9',
+                backgroundColor: '#263342',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
                 padding: '2px 8px',
-                borderRadius: '10px',
+                borderRadius: '8px',
                 maxWidth: '140px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -250,10 +245,10 @@ export const PeriodStatusBar: React.FC = () => {
             style={{
               width: '100%',
               maxWidth: '540px',
-              background: '#1a1b1f',
-              border: '1px solid #333',
+              background: '#191b20',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
               borderRadius: '16px',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.65)',
               overflow: 'hidden',
               maxHeight: '85vh',
               display: 'flex',
@@ -264,21 +259,30 @@ export const PeriodStatusBar: React.FC = () => {
             <div
               style={{
                 padding: '18px 24px',
-                borderBottom: '1px solid #2a2b30',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Calendar size={18} style={{ color: '#38bdf8' }} />
-                <h3 style={{ margin: 0, color: '#fff', fontSize: '16px', fontWeight: 600 }}>
+                <Calendar size={18} style={{ color: '#94a3b8' }} />
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '16px', fontWeight: 600 }}>
                   College Timetable & Period Status
                 </h3>
               </div>
               <button
                 onClick={() => setShowScheduleModal(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
               >
                 <X size={18} />
               </button>
@@ -302,14 +306,17 @@ export const PeriodStatusBar: React.FC = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: isBreak ? '6px 12px' : '10px 14px',
+                        padding: isBreak ? '8px 12px' : '10px 14px',
                         borderRadius: '8px',
                         background: isCurrent
-                          ? 'rgba(34, 197, 94, 0.12)'
+                          ? 'rgba(255, 255, 255, 0.08)'
                           : isBreak
                           ? 'rgba(255, 255, 255, 0.02)'
-                          : 'rgba(255, 255, 255, 0.04)',
-                        border: isCurrent ? '1px solid #22c55e' : '1px solid transparent',
+                          : 'rgba(255, 255, 255, 0.035)',
+                        border: isCurrent
+                          ? '1px solid rgba(255, 255, 255, 0.2)'
+                          : '1px solid rgba(255, 255, 255, 0.04)',
+                        transition: 'background 0.15s ease',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -319,7 +326,7 @@ export const PeriodStatusBar: React.FC = () => {
                               width: '8px',
                               height: '8px',
                               borderRadius: '50%',
-                              backgroundColor: '#22c55e',
+                              backgroundColor: '#52b788',
                             }}
                           />
                         ) : (
@@ -328,7 +335,7 @@ export const PeriodStatusBar: React.FC = () => {
                               width: '8px',
                               height: '8px',
                               borderRadius: '50%',
-                              backgroundColor: isBreak ? '#f59e0b' : '#475569',
+                              backgroundColor: isBreak ? '#d97706' : '#475569',
                             }}
                           />
                         )}
@@ -336,7 +343,7 @@ export const PeriodStatusBar: React.FC = () => {
                           style={{
                             fontSize: '13px',
                             fontWeight: isCurrent ? 600 : 500,
-                            color: isCurrent ? '#4ade80' : isBreak ? '#94a3b8' : '#e2e8f0',
+                            color: isCurrent ? '#ffffff' : isBreak ? '#94a3b8' : '#e2e8f0',
                           }}
                         >
                           {slot.name}
@@ -345,11 +352,13 @@ export const PeriodStatusBar: React.FC = () => {
                           <span
                             style={{
                               fontSize: '11px',
-                              background: activeCourse.color || '#1a73e8',
-                              color: '#fff',
-                              padding: '1px 6px',
-                              borderRadius: '8px',
+                              background: '#232b36',
+                              border: '1px solid rgba(255, 255, 255, 0.16)',
+                              color: '#f1f5f9',
+                              padding: '2px 8px',
+                              borderRadius: '6px',
                               fontWeight: 600,
+                              letterSpacing: '0.3px',
                             }}
                           >
                             {activeCourse.name}
@@ -365,13 +374,22 @@ export const PeriodStatusBar: React.FC = () => {
                         <button
                           onClick={() => handleSimulateTime(slot.startMinutes + 1)}
                           style={{
-                            background: 'rgba(255, 255, 255, 0.06)',
+                            background: 'rgba(255, 255, 255, 0.05)',
                             border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '4px',
-                            color: '#cbd5e1',
-                            fontSize: '10px',
-                            padding: '3px 6px',
+                            borderRadius: '6px',
+                            color: '#94a3b8',
+                            fontSize: '11px',
+                            padding: '3px 8px',
                             cursor: 'pointer',
+                            transition: 'all 0.12s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                            e.currentTarget.style.color = '#fff';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                            e.currentTarget.style.color = '#94a3b8';
                           }}
                           title={`Simulate time inside ${slot.name}`}
                         >
@@ -388,11 +406,11 @@ export const PeriodStatusBar: React.FC = () => {
             <div
               style={{
                 padding: '16px 24px',
-                background: '#141518',
-                borderTop: '1px solid #2a2b30',
+                background: '#141519',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '10px',
+                gap: '12px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -414,9 +432,9 @@ export const PeriodStatusBar: React.FC = () => {
                       alignItems: 'center',
                       gap: '4px',
                       background: 'rgba(255, 255, 255, 0.08)',
-                      border: 'none',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
                       borderRadius: '6px',
-                      color: '#fff',
+                      color: '#cbd5e1',
                       fontSize: '11px',
                       padding: '4px 8px',
                       cursor: 'pointer',
@@ -427,7 +445,7 @@ export const PeriodStatusBar: React.FC = () => {
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
                 {scheduleInfo.status === 'in_period' && (
                   <button
                     onClick={() => {
@@ -439,18 +457,27 @@ export const PeriodStatusBar: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
-                      background: '#2563eb',
-                      border: 'none',
+                      gap: '8px',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.16)',
                       borderRadius: '8px',
-                      color: '#fff',
+                      color: '#f8fafc',
                       fontSize: '12px',
                       fontWeight: 600,
-                      padding: '8px',
+                      padding: '10px 14px',
                       cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.14)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.28)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.16)';
                     }}
                   >
-                    <GraduationCap size={14} />
+                    <GraduationCap size={15} style={{ color: '#cbd5e1' }} />
                     {activeCourse ? 'Change Classroom' : 'Select Classroom'}
                   </button>
                 )}
@@ -466,18 +493,27 @@ export const PeriodStatusBar: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
-                      background: 'rgba(34, 197, 94, 0.15)',
-                      border: '1px solid rgba(34, 197, 94, 0.4)',
+                      gap: '8px',
+                      background: '#1d3326',
+                      border: '1px solid rgba(255, 255, 255, 0.18)',
                       borderRadius: '8px',
-                      color: '#4ade80',
+                      color: '#f1f5f9',
                       fontSize: '12px',
                       fontWeight: 600,
-                      padding: '8px',
+                      padding: '10px 14px',
                       cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#254231';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.28)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#1d3326';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.18)';
                     }}
                   >
-                    <CheckCircle2 size={14} />
+                    <CheckCircle2 size={15} color="#86efac" />
                     Upload Notes Now
                   </button>
                 )}

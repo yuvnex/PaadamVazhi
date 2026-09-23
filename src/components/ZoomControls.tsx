@@ -24,7 +24,7 @@ const ZoomControls: React.FC = () => {
     setViewTransform({
       offsetX: rect.width / 2,
       offsetY: rect.height / 2,
-      zoom: 0.8,
+      zoom: 1,
     });
   };
 
@@ -40,49 +40,66 @@ const ZoomControls: React.FC = () => {
   };
 
   return (
-    <div data-toolbar style={{
-      position: 'fixed',
-      bottom: '16px',
-      right: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '4px',
-      background: '#1a1b1e',
-      border: '1px solid #3a3b3e',
-      borderRadius: '10px',
-      padding: '4px',
-      zIndex: 100,
-    }}>
+    <div
+      data-toolbar
+      style={{
+        position: 'fixed',
+        bottom: '16px',
+        right: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: 'rgba(28, 31, 38, 0.94)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '14px',
+        padding: '5px 8px',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)',
+        backdropFilter: 'blur(16px)',
+        zIndex: 100,
+        userSelect: 'none',
+      }}
+    >
       <button
         onClick={handleZoomOut}
         title="Zoom out"
         aria-label="Zoom out"
         style={{
-          width: '36px',
-          height: '36px',
+          width: '38px',
+          height: '38px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'transparent',
           border: 'none',
-          borderRadius: '6px',
-          color: '#999',
+          borderRadius: '8px',
+          color: '#9ca3af',
           cursor: 'pointer',
           outline: 'none',
+          transition: 'all 0.15s ease',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#252629'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+          e.currentTarget.style.color = '#f3f4f6';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = '#9ca3af';
+        }}
       >
-        <ZoomOut size={16} />
+        <ZoomOut size={17} />
       </button>
 
-      <span style={{
-        color: '#999',
-        fontSize: '12px',
-        minWidth: '40px',
-        textAlign: 'center',
-        userSelect: 'none',
-      }}>
+      <span
+        style={{
+          color: '#e2e8f0',
+          fontSize: '12px',
+          fontWeight: 600,
+          minWidth: '42px',
+          textAlign: 'center',
+          userSelect: 'none',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
         {zoomPercent}%
       </span>
 
@@ -91,47 +108,61 @@ const ZoomControls: React.FC = () => {
         title="Zoom in"
         aria-label="Zoom in"
         style={{
-          width: '36px',
-          height: '36px',
+          width: '38px',
+          height: '38px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'transparent',
           border: 'none',
-          borderRadius: '6px',
-          color: '#999',
+          borderRadius: '8px',
+          color: '#9ca3af',
           cursor: 'pointer',
           outline: 'none',
+          transition: 'all 0.15s ease',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#252629'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+          e.currentTarget.style.color = '#f3f4f6';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = '#9ca3af';
+        }}
       >
-        <ZoomIn size={16} />
+        <ZoomIn size={17} />
       </button>
 
-      <div style={{ width: '1px', height: '20px', background: '#3a3b3e' }} />
+      <div style={{ width: '1px', height: '22px', background: 'rgba(255, 255, 255, 0.12)', margin: '0 2px' }} />
 
       <button
         onClick={handleFitToScreen}
         title="Fit to screen"
         aria-label="Fit to screen"
         style={{
-          width: '36px',
-          height: '36px',
+          width: '38px',
+          height: '38px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'transparent',
           border: 'none',
-          borderRadius: '6px',
-          color: '#999',
+          borderRadius: '8px',
+          color: '#9ca3af',
           cursor: 'pointer',
           outline: 'none',
+          transition: 'all 0.15s ease',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#252629'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+          e.currentTarget.style.color = '#f3f4f6';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = '#9ca3af';
+        }}
       >
-        <Maximize size={16} />
+        <Maximize size={17} />
       </button>
 
       <button
@@ -139,22 +170,29 @@ const ZoomControls: React.FC = () => {
         title="Reset zoom"
         aria-label="Reset zoom"
         style={{
-          width: '36px',
-          height: '36px',
+          width: '38px',
+          height: '38px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'transparent',
           border: 'none',
-          borderRadius: '6px',
-          color: '#999',
+          borderRadius: '8px',
+          color: '#9ca3af',
           cursor: 'pointer',
           outline: 'none',
+          transition: 'all 0.15s ease',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#252629'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+          e.currentTarget.style.color = '#f3f4f6';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = '#9ca3af';
+        }}
       >
-        <RotateCcw size={16} />
+        <RotateCcw size={17} />
       </button>
     </div>
   );

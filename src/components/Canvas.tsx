@@ -5,9 +5,10 @@ import type { Point, Stroke, BoardShape, TextObject, ImageObject, StickyNote, Bo
 import { v4 as uuidv4 } from 'uuid';
 
 const Canvas: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const animFrameRef = useRef<number>(0);
+  const baseCanvasRef = useRef<HTMLCanvasElement>(null);
+  const activeCanvasRef = useRef<HTMLCanvasElement>(null);
+
   const isDrawing = useRef(false);
   const isPanning = useRef(false);
   const lastPanPoint = useRef<Point>({ x: 0, y: 0 });
@@ -16,6 +17,7 @@ const Canvas: React.FC = () => {
   const dragOffsets = useRef<Map<string, Point>>(new Map());
   const pinchStartDist = useRef<number | null>(null);
   const pinchStartZoom = useRef<number>(1);
+  const activeRafRef = useRef<number>(0);
 
   const {
     currentTool,
@@ -43,6 +45,7 @@ const Canvas: React.FC = () => {
 
   // Helper: check if a hex color is dark
   const isColorDark = (hex: string): boolean => {
+    if (!hex || !hex.startsWith('#') || hex.length < 7) return true;
     const c = hex.replace('#', '');
     const r = parseInt(c.substring(0, 2), 16);
     const g = parseInt(c.substring(2, 4), 16);
@@ -58,274 +61,123 @@ const Canvas: React.FC = () => {
     };
   }, [viewTransform]);
 
-  // Resize canvas
+  // Optimal DPR clamping for 4K IFP displays (prevents GPU memory exhaustion)
+  const getDpr = () => Math.min(window.devicePixelRatio || 1, 1.25);
+
+  // Resize both canvases to container bounds
   useEffect(() => {
     const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
+    const baseCanvas = baseCanvasRef.current;
+    const activeCanvas = activeCanvasRef.current;
+    if (!container || !baseCanvas || !activeCanvas) return;
 
     const resize = () => {
       const rect = container.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.scale(dpr, dpr);
+      const dpr = getDpr();
+      const w = Math.max(1, Math.round(rect.width * dpr));
+      const h = Math.max(1, Math.round(rect.height * dpr));
+
+      if (baseCanvas.width !== w || baseCanvas.height !== h) {
+        baseCanvas.width = w;
+        baseCanvas.height = h;
+        baseCanvas.style.width = `${rect.width}px`;
+        baseCanvas.style.height = `${rect.height}px`;
+      }
+
+      if (activeCanvas.width !== w || activeCanvas.height !== h) {
+        activeCanvas.width = w;
+        activeCanvas.height = h;
+        activeCanvas.style.width = `${rect.width}px`;
+        activeCanvas.style.height = `${rect.height}px`;
+      }
+
+      renderBaseCanvas();
     };
 
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [viewTransform, currentPageIndex, board, selectedObjectIds, settings]);
 
-  // Main render loop
-  const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.width / dpr;
-    const h = canvas.height / dpr;
-
-    ctx.save();
-    ctx.clearRect(0, 0, w, h);
-
-    // Background
-    ctx.fillStyle = '#292A2E';
-    ctx.fillRect(0, 0, w, h);
-
-    // Apply view transform
-    ctx.save();
-    ctx.translate(viewTransform.offsetX, viewTransform.offsetY);
-    ctx.scale(viewTransform.zoom, viewTransform.zoom);
-
-    // Draw canvas area
-    const canvasWidth = 3000;
-    const canvasHeight = 2000;
-    const page = board.pages[currentPageIndex];
-    const bgColor = page?.backgroundColor || '#000000';
-    ctx.fillStyle = bgColor;
-    // Shadow only visible against non-matching background
-    const isDark = isColorDark(bgColor);
-    ctx.shadowColor = isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 20;
-    ctx.fillRect(-canvasWidth / 2, -canvasHeight / 2, canvasWidth, canvasHeight);
-    ctx.shadowBlur = 0;
-
-    // Draw grid dots if setting
-    if (settings.canvasBackground === 'dots') {
-      ctx.fillStyle = isDark ? '#555' : '#ddd';
-      for (let x = -canvasWidth / 2; x < canvasWidth / 2; x += 20) {
-        for (let y = -canvasHeight / 2; y < canvasHeight / 2; y += 20) {
-          ctx.beginPath();
-          ctx.arc(x, y, 0.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    } else if (settings.canvasBackground === 'grid') {
-      ctx.strokeStyle = isDark ? '#444' : '#e8e8e8';
-      ctx.lineWidth = 0.5;
-      for (let x = -canvasWidth / 2; x <= canvasWidth / 2; x += 20) {
-        ctx.beginPath();
-        ctx.moveTo(x, -canvasHeight / 2);
-        ctx.lineTo(x, canvasHeight / 2);
-        ctx.stroke();
-      }
-      for (let y = -canvasHeight / 2; y <= canvasHeight / 2; y += 20) {
-        ctx.beginPath();
-        ctx.moveTo(-canvasWidth / 2, y);
-        ctx.lineTo(canvasWidth / 2, y);
-        ctx.stroke();
-      }
-    }
-
-    // Clip to canvas area
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(-canvasWidth / 2, -canvasHeight / 2, canvasWidth, canvasHeight);
-    ctx.clip();
-
-    if (page) {
-      // Draw objects
-      for (const obj of page.objects) {
-        drawObject(ctx, obj);
-      }
-    }
-
-    // Draw shape preview
-    if (shapePreview) {
-      drawObject(ctx, shapePreview);
-    }
-
-    // Draw current stroke
-    if (isDrawing.current && currentTool === 'pen' && currentStroke.current.length > 1) {
-      drawStrokePath(ctx, currentStroke.current, penColor, penThickness, penType);
-    }
-
-    ctx.restore();
-
-    // Draw selection boxes
-    if (selectedObjectIds.length > 0 && page) {
-      for (const id of selectedObjectIds) {
-        const obj = page.objects.find((o) => o.id === id);
-        if (obj) {
-          drawSelectionBox(ctx, obj);
-        }
-      }
-    }
-
-    // Draw selection rectangle
-    if (selectionBox) {
-      ctx.strokeStyle = '#4A90D9';
-      ctx.lineWidth = 1 / viewTransform.zoom;
-      ctx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
-      ctx.strokeRect(selectionBox.x, selectionBox.y, selectionBox.w, selectionBox.h);
-      ctx.setLineDash([]);
-    }
-
-    ctx.restore();
-  }, [board, currentPageIndex, viewTransform, selectedObjectIds, currentTool, penColor, penThickness, penType, shapePreview, selectionBox, settings]);
-
-  // Render loop with requestAnimationFrame
-  useEffect(() => {
-    const loop = () => {
-      render();
-      animFrameRef.current = requestAnimationFrame(loop);
-    };
-    animFrameRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, [render]);
-
-  // Draw a single object
-  const drawObject = (ctx: CanvasRenderingContext2D, obj: BoardObject) => {
-    ctx.save();
-    switch (obj.type) {
-      case 'stroke': {
-        const stroke = obj as Stroke;
-        if (stroke.points.length > 0) {
-          drawStrokePath(ctx, stroke.points, stroke.color, stroke.thickness, stroke.penType);
-        }
-        break;
-      }
-      case 'shape': {
-        drawShape(ctx, obj as BoardShape);
-        break;
-      }
-      case 'text': {
-        const text = obj as TextObject;
-        ctx.fillStyle = text.color;
-        ctx.font = `${text.fontStyle} ${text.fontWeight} ${text.fontSize}px ${text.fontFamily}`;
-        ctx.textAlign = text.textAlign;
-        const lines = text.text.split('\n');
-        lines.forEach((line, i) => {
-          ctx.fillText(line, text.x, text.y + text.fontSize * (i + 1));
-        });
-        break;
-      }
-      case 'sticky': {
-        const sticky = obj as StickyNote;
-        ctx.fillStyle = sticky.color;
-        ctx.shadowColor = 'rgba(0,0,0,0.2)';
-        ctx.shadowBlur = 4;
-        roundRect(ctx, sticky.x, sticky.y, sticky.width, sticky.height, 4);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = '#333';
-        ctx.font = `${sticky.fontSize}px sans-serif`;
-        ctx.textAlign = 'left';
-        const lines = sticky.text.split('\n');
-        lines.forEach((line, i) => {
-          ctx.fillText(line, sticky.x + 8, sticky.y + 20 + sticky.fontSize * i);
-        });
-        break;
-      }
-      case 'image': {
-        const img = obj as ImageObject;
-        // placeholder
-        ctx.fillStyle = '#eee';
-        ctx.fillRect(img.x, img.y, img.width, img.height);
-        ctx.strokeStyle = '#ccc';
-        ctx.strokeRect(img.x, img.y, img.width, img.height);
-        ctx.fillStyle = '#999';
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Image', img.x + img.width / 2, img.y + img.height / 2);
-        break;
-      }
-    }
-    ctx.restore();
-  };
-
+  // Draw stroke path with smooth quadratic curves
   const drawStrokePath = (
     ctx: CanvasRenderingContext2D,
     points: Point[],
     color: string,
     thickness: number,
-    penType: string
+    pType: string
   ) => {
     if (points.length < 2) return;
-    
+
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = color;
-    
+
     let alpha = 1;
     let lineWidth = thickness;
-    
-    switch (penType) {
+
+    switch (pType) {
       case 'marker':
         alpha = 0.8;
         lineWidth = thickness * 1.2;
         break;
       case 'highlighter':
-        alpha = 0.3;
-        lineWidth = thickness * 2;
+        alpha = 0.35;
+        lineWidth = thickness * 2.2;
         break;
       case 'pencil':
         alpha = 0.85;
-        lineWidth = thickness * 0.7;
+        lineWidth = Math.max(thickness * 0.7, 1);
         break;
       case 'thin':
-        lineWidth = Math.max(thickness * 0.3, 1);
+        lineWidth = Math.max(thickness * 0.4, 1);
         break;
     }
-    
+
     ctx.globalAlpha = alpha;
     ctx.lineWidth = lineWidth;
-    
+
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
-    
+
     for (let i = 1; i < points.length - 1; i++) {
       const xc = (points[i].x + points[i + 1].x) / 2;
       const yc = (points[i].y + points[i + 1].y) / 2;
       ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
     }
-    
-    if (points.length > 1) {
-      const last = points[points.length - 1];
-      ctx.lineTo(last.x, last.y);
-    }
-    
+
+    const last = points[points.length - 1];
+    ctx.lineTo(last.x, last.y);
+
     ctx.stroke();
     ctx.restore();
+  };
+
+  const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
   };
 
   const drawShape = (ctx: CanvasRenderingContext2D, shape: BoardShape) => {
     ctx.save();
     ctx.strokeStyle = shape.strokeColor;
     ctx.lineWidth = shape.strokeWidth;
-    
+
     if (shape.dashed) {
       ctx.setLineDash([shape.strokeWidth * 2, shape.strokeWidth]);
     }
-    
+
     if (shape.fillColor && shape.fillColor !== 'transparent') {
       ctx.fillStyle = shape.fillColor;
     }
@@ -341,15 +193,7 @@ const Canvas: React.FC = () => {
         ctx.stroke();
         break;
       }
-      case 'circle': {
-        const rx = Math.abs(shape.width) / 2;
-        const ry = Math.abs(shape.height) / 2;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        if (shape.fillColor && shape.fillColor !== 'transparent') ctx.fill();
-        ctx.stroke();
-        break;
-      }
+      case 'circle':
       case 'ellipse': {
         const rx = Math.abs(shape.width) / 2;
         const ry = Math.abs(shape.height) / 2;
@@ -371,7 +215,6 @@ const Canvas: React.FC = () => {
         ctx.moveTo(shape.x, shape.y);
         ctx.lineTo(shape.x + shape.width, shape.y + shape.height);
         ctx.stroke();
-        // Arrowhead
         const angle = Math.atan2(shape.height, shape.width);
         const headLen = 15;
         ctx.beginPath();
@@ -432,10 +275,68 @@ const Canvas: React.FC = () => {
     ctx.restore();
   };
 
+  const drawObject = (ctx: CanvasRenderingContext2D, obj: BoardObject) => {
+    ctx.save();
+    switch (obj.type) {
+      case 'stroke': {
+        const stroke = obj as Stroke;
+        if (stroke.points.length > 0) {
+          drawStrokePath(ctx, stroke.points, stroke.color, stroke.thickness, stroke.penType);
+        }
+        break;
+      }
+      case 'shape': {
+        drawShape(ctx, obj as BoardShape);
+        break;
+      }
+      case 'text': {
+        const text = obj as TextObject;
+        ctx.fillStyle = text.color;
+        ctx.font = `${text.fontStyle} ${text.fontWeight} ${text.fontSize}px ${text.fontFamily}`;
+        ctx.textAlign = text.textAlign;
+        const lines = text.text.split('\n');
+        lines.forEach((line, i) => {
+          ctx.fillText(line, text.x, text.y + text.fontSize * (i + 1));
+        });
+        break;
+      }
+      case 'sticky': {
+        const sticky = obj as StickyNote;
+        ctx.fillStyle = sticky.color;
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.shadowBlur = 4;
+        roundRect(ctx, sticky.x, sticky.y, sticky.width, sticky.height, 4);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#333';
+        ctx.font = `${sticky.fontSize}px sans-serif`;
+        ctx.textAlign = 'left';
+        const lines = sticky.text.split('\n');
+        lines.forEach((line, i) => {
+          ctx.fillText(line, sticky.x + 8, sticky.y + 20 + sticky.fontSize * i);
+        });
+        break;
+      }
+      case 'image': {
+        const img = obj as ImageObject;
+        ctx.fillStyle = '#1e2024';
+        ctx.fillRect(img.x, img.y, img.width, img.height);
+        ctx.strokeStyle = '#3a3b3e';
+        ctx.strokeRect(img.x, img.y, img.width, img.height);
+        ctx.fillStyle = '#888';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Image', img.x + img.width / 2, img.y + img.height / 2);
+        break;
+      }
+    }
+    ctx.restore();
+  };
+
   const drawSelectionBox = (ctx: CanvasRenderingContext2D, obj: BoardObject) => {
     const box = getBoundingBox(obj);
     const pad = 6;
-    ctx.strokeStyle = '#4A90D9';
+    ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 1.5 / viewTransform.zoom;
     ctx.setLineDash([]);
     ctx.strokeRect(
@@ -445,10 +346,9 @@ const Canvas: React.FC = () => {
       box.height + pad * 2
     );
 
-    // Draw corner handles
     const handleSize = 6 / viewTransform.zoom;
     ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#4A90D9';
+    ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 1.5 / viewTransform.zoom;
     const corners = [
       [box.x - pad, box.y - pad],
@@ -462,39 +362,160 @@ const Canvas: React.FC = () => {
     }
   };
 
-  const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  };
+  // Base canvas render: background + infinite grid + committed objects
+  const renderBaseCanvas = useCallback(() => {
+    const canvas = baseCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+    if (!ctx) return;
 
-  // Get eraser radius
+    const dpr = getDpr();
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    // FULL SCREEN EDGE-TO-EDGE BACKGROUND (no clipping box!)
+    const page = board.pages[currentPageIndex];
+    const bgColor = page?.backgroundColor || '#1e2024';
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, h);
+
+    const isDark = isColorDark(bgColor);
+
+    // Apply view transform
+    ctx.save();
+    ctx.translate(viewTransform.offsetX, viewTransform.offsetY);
+    ctx.scale(viewTransform.zoom, viewTransform.zoom);
+
+    // Calculate visible area in canvas coordinates for infinite grid/dots
+    const topLeft = screenToCanvas(0, 0);
+    const bottomRight = screenToCanvas(w, h);
+    const minX = Math.floor(topLeft.x / 40) * 40 - 80;
+    const maxX = Math.ceil(bottomRight.x / 40) * 40 + 80;
+    const minY = Math.floor(topLeft.y / 40) * 40 - 80;
+    const maxY = Math.ceil(bottomRight.y / 40) * 40 + 80;
+
+    // Draw infinite grid dots if setting
+    if (settings.canvasBackground === 'dots') {
+      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
+      for (let x = minX; x <= maxX; x += 40) {
+        for (let y = minY; y <= maxY; y += 40) {
+          ctx.beginPath();
+          ctx.arc(x, y, 1 / viewTransform.zoom, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else if (settings.canvasBackground === 'grid') {
+      ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
+      ctx.lineWidth = 1 / viewTransform.zoom;
+      ctx.beginPath();
+      for (let x = minX; x <= maxX; x += 40) {
+        ctx.moveTo(x, minY);
+        ctx.lineTo(x, maxY);
+      }
+      for (let y = minY; y <= maxY; y += 40) {
+        ctx.moveTo(minX, y);
+        ctx.lineTo(maxX, y);
+      }
+      ctx.stroke();
+    }
+
+    // Draw all committed objects
+    if (page) {
+      for (const obj of page.objects) {
+        drawObject(ctx, obj);
+      }
+    }
+
+    // Draw selection boxes
+    if (selectedObjectIds.length > 0 && page) {
+      for (const id of selectedObjectIds) {
+        const obj = page.objects.find((o) => o.id === id);
+        if (obj) {
+          drawSelectionBox(ctx, obj);
+        }
+      }
+    }
+
+    ctx.restore();
+    ctx.restore();
+  }, [board, currentPageIndex, viewTransform, selectedObjectIds, settings, screenToCanvas]);
+
+  // Re-render base canvas when store state changes
+  useEffect(() => {
+    renderBaseCanvas();
+  }, [renderBaseCanvas]);
+
+  // Active canvas render: dedicated fast overlay for active stroke/shape/selection box
+  const renderActiveCanvas = useCallback(() => {
+    const canvas = activeCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { desynchronized: true });
+    if (!ctx) return;
+
+    const dpr = getDpr();
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    // Apply view transform
+    ctx.save();
+    ctx.translate(viewTransform.offsetX, viewTransform.offsetY);
+    ctx.scale(viewTransform.zoom, viewTransform.zoom);
+
+    // Render active drawing stroke (lightning-fast, takes < 0.2ms)
+    if (isDrawing.current && currentTool === 'pen' && currentStroke.current.length > 1) {
+      drawStrokePath(ctx, currentStroke.current, penColor, penThickness, penType);
+    }
+
+    // Render shape preview during drag
+    if (shapePreview) {
+      drawShape(ctx, shapePreview);
+    }
+
+    // Render selection rectangle during drag
+    if (selectionBox) {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.5 / viewTransform.zoom;
+      ctx.setLineDash([4 / viewTransform.zoom, 4 / viewTransform.zoom]);
+      ctx.strokeRect(selectionBox.x, selectionBox.y, selectionBox.w, selectionBox.h);
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+    ctx.restore();
+  }, [viewTransform, currentTool, penColor, penThickness, penType, shapePreview, selectionBox]);
+
+  const scheduleActiveRender = useCallback(() => {
+    if (activeRafRef.current) cancelAnimationFrame(activeRafRef.current);
+    activeRafRef.current = requestAnimationFrame(renderActiveCanvas);
+  }, [renderActiveCanvas]);
+
   const getEraserRadius = () => {
     switch (eraserSize) {
-      case 'small': return 10;
-      case 'medium': return 20;
-      case 'large': return 40;
+      case 'small': return 12;
+      case 'medium': return 26;
+      case 'large': return 48;
     }
   };
 
-  // Pointer handlers
+  // Pointer event handlers
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
     const point = screenToCanvas(sx, sy);
 
-    canvas.setPointerCapture(e.pointerId);
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
 
     if (currentTool === 'hand' || e.button === 1) {
       isPanning.current = true;
@@ -504,7 +525,8 @@ const Canvas: React.FC = () => {
 
     if (currentTool === 'pen') {
       isDrawing.current = true;
-      currentStroke.current = [{ ...point, pressure: e.pressure }];
+      currentStroke.current = [{ ...point, pressure: e.pressure || 0.5 }];
+      scheduleActiveRender();
       return;
     }
 
@@ -526,16 +548,14 @@ const Canvas: React.FC = () => {
     }
 
     if (currentTool === 'select') {
-      // Check if clicking on an object
       const page = board.pages[currentPageIndex];
       if (!page) return;
-      
+
       let found = false;
       for (let i = page.objects.length - 1; i >= 0; i--) {
         const obj = page.objects[i];
-        if (hitTest(obj, point, 8)) {
+        if (hitTest(obj, point, 10)) {
           if (e.shiftKey) {
-            // Toggle selection
             const newIds = selectedObjectIds.includes(obj.id)
               ? selectedObjectIds.filter((id) => id !== obj.id)
               : [...selectedObjectIds, obj.id];
@@ -543,12 +563,11 @@ const Canvas: React.FC = () => {
           } else if (!selectedObjectIds.includes(obj.id)) {
             setSelectedObjects([obj.id]);
           }
-          
-          // Start drag
+
           dragStart.current = { x: point.x, y: point.y };
           dragOffsets.current = new Map();
           for (const id of selectedObjectIds.includes(obj.id) ? selectedObjectIds : [obj.id]) {
-            const o = page.objects.find((obj) => obj.id === id);
+            const o = page.objects.find((item) => item.id === id);
             if (o) {
               dragOffsets.current.set(id, { x: o.x - point.x, y: o.y - point.y });
             }
@@ -558,9 +577,8 @@ const Canvas: React.FC = () => {
           break;
         }
       }
-      
+
       if (!found) {
-        // Start selection rectangle
         setSelectedObjects([]);
         dragStart.current = point;
         isDrawing.current = true;
@@ -576,14 +594,14 @@ const Canvas: React.FC = () => {
         x: point.x,
         y: point.y - 15,
         text: 'Type here...',
-        fontSize: 16,
+        fontSize: 18,
         fontFamily: 'sans-serif',
         fontWeight: 'normal',
         fontStyle: 'normal',
         textAlign: 'left',
         color: penColor,
         width: 200,
-        height: 24,
+        height: 28,
         timestamp: Date.now(),
       };
       addObject(textObj);
@@ -610,17 +628,15 @@ const Canvas: React.FC = () => {
         timestamp: Date.now(),
       };
       setShapePreview(shape);
+      scheduleActiveRender();
       return;
     }
-  }, [currentTool, screenToCanvas, board, currentPageIndex, selectedObjectIds, penColor, penThickness, shapeType, eraserSize]);
+  }, [currentTool, screenToCanvas, board, currentPageIndex, selectedObjectIds, penColor, penThickness, shapeType, eraserSize, scheduleActiveRender]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
-    const point = screenToCanvas(sx, sy);
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
 
     if (isPanning.current) {
       const dx = e.clientX - lastPanPoint.current.x;
@@ -633,12 +649,30 @@ const Canvas: React.FC = () => {
       return;
     }
 
+    // High-performance stylus/pointer handling with coalesced events
     if (currentTool === 'pen' && isDrawing.current) {
-      currentStroke.current.push({ ...point, pressure: e.pressure });
+      // Collect all coalesced events from high-refresh rate IFP digitizers (120Hz+)
+      const nativeEvent = e.nativeEvent as any;
+      const events: PointerEvent[] = typeof nativeEvent.getCoalescedEvents === 'function'
+        ? nativeEvent.getCoalescedEvents()
+        : [nativeEvent || e];
+
+      for (const ev of events) {
+        const sx = ev.clientX - rect.left;
+        const sy = ev.clientY - rect.top;
+        const pt = screenToCanvas(sx, sy);
+        currentStroke.current.push({ ...pt, pressure: ev.pressure || 0.5 });
+      }
+
+      scheduleActiveRender();
       return;
     }
 
-    if (currentTool === 'eraser' && e.buttons === 1) {
+    const sx = e.clientX - rect.left;
+    const sy = e.clientY - rect.top;
+    const point = screenToCanvas(sx, sy);
+
+    if (currentTool === 'eraser' && (e.buttons === 1 || e.pressure > 0)) {
       const page = board.pages[currentPageIndex];
       if (!page) return;
       const radius = getEraserRadius();
@@ -657,9 +691,8 @@ const Canvas: React.FC = () => {
     if (currentTool === 'select' && isDrawing.current) {
       const page = board.pages[currentPageIndex];
       if (!page) return;
-      
+
       if (dragStart.current && dragOffsets.current.size > 0) {
-        // Move selected objects
         for (const [id, offset] of dragOffsets.current) {
           updateObject(id, {
             x: point.x + offset.x,
@@ -667,22 +700,21 @@ const Canvas: React.FC = () => {
           });
         }
       } else if (dragStart.current) {
-        // Selection rectangle
-        const sx = Math.min(dragStart.current.x, point.x);
-        const sy = Math.min(dragStart.current.y, point.y);
-        const ex = Math.max(dragStart.current.x, point.x);
-        const ey = Math.max(dragStart.current.y, point.y);
-        setSelectionBox({ x: sx, y: sy, w: ex - sx, h: ey - sy });
-        
-        // Select objects within box
+        const boxSx = Math.min(dragStart.current.x, point.x);
+        const boxSy = Math.min(dragStart.current.y, point.y);
+        const boxEx = Math.max(dragStart.current.x, point.x);
+        const boxEy = Math.max(dragStart.current.y, point.y);
+        setSelectionBox({ x: boxSx, y: boxSy, w: boxEx - boxSx, h: boxEy - boxSy });
+
         const ids: string[] = [];
         for (const obj of page.objects) {
           const box = getBoundingBox(obj);
-          if (box.x >= sx && box.y >= sy && box.x + box.width <= ex && box.y + box.height <= ey) {
+          if (box.x >= boxSx && box.y >= boxSy && box.x + box.width <= boxEx && box.y + box.height <= boxEy) {
             ids.push(obj.id);
           }
         }
         setSelectedObjects(ids);
+        scheduleActiveRender();
       }
       return;
     }
@@ -694,15 +726,15 @@ const Canvas: React.FC = () => {
         if (!prev) return null;
         return { ...prev, width: w, height: h };
       });
+      scheduleActiveRender();
       return;
     }
-  }, [currentTool, screenToCanvas, viewTransform, board, currentPageIndex, eraserSize]);
+  }, [currentTool, screenToCanvas, viewTransform, board, currentPageIndex, eraserSize, scheduleActiveRender]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      try { canvas.releasePointerCapture(e.pointerId); } catch {}
-    }
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
 
     if (isPanning.current) {
       isPanning.current = false;
@@ -731,6 +763,13 @@ const Canvas: React.FC = () => {
         addObject(stroke);
       }
       currentStroke.current = [];
+
+      // Clear active canvas overlay after committing to base canvas
+      const canvas = activeCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       return;
     }
 
@@ -739,6 +778,7 @@ const Canvas: React.FC = () => {
       dragStart.current = null;
       dragOffsets.current = new Map();
       setSelectionBox(null);
+      scheduleActiveRender();
       return;
     }
 
@@ -749,16 +789,17 @@ const Canvas: React.FC = () => {
         addObject(shapePreview);
       }
       setShapePreview(null);
+      scheduleActiveRender();
       return;
     }
-  }, [currentTool, penColor, penThickness, penType, shapePreview]);
+  }, [currentTool, penColor, penThickness, penType, shapePreview, scheduleActiveRender]);
 
-  // Wheel zoom
+  // Mouse wheel zoom / pan
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
@@ -779,7 +820,7 @@ const Canvas: React.FC = () => {
     }
   }, [viewTransform]);
 
-  // Touch pinch zoom
+  // Touch pinch-to-zoom
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       const dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -797,20 +838,20 @@ const Canvas: React.FC = () => {
       const dist = Math.sqrt(dx * dx + dy * dy);
       const scale = dist / pinchStartDist.current;
       const newZoom = Math.max(0.1, Math.min(5, pinchStartZoom.current * scale));
-      
+
       setViewTransform({
         zoom: newZoom,
       });
     }
   }, []);
 
-  // Keyboard events
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (editingText) return;
-      
+
       const ctrl = e.ctrlKey || e.metaKey;
-      
+
       if (ctrl && e.key === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
@@ -820,13 +861,7 @@ const Canvas: React.FC = () => {
         }
         return;
       }
-      
-      if (ctrl && e.key === 's') {
-        e.preventDefault();
-        // Auto-save triggers
-        return;
-      }
-      
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedObjectIds.length > 0) {
           e.preventDefault();
@@ -835,17 +870,7 @@ const Canvas: React.FC = () => {
         }
         return;
       }
-      
-      if (ctrl && e.key === 'c') {
-        // Copy
-        return;
-      }
-      
-      if (ctrl && e.key === 'v') {
-        // Paste
-        return;
-      }
-      
+
       if (ctrl && e.key === 'd') {
         e.preventDefault();
         if (selectedObjectIds.length > 0) {
@@ -853,7 +878,7 @@ const Canvas: React.FC = () => {
         }
         return;
       }
-      
+
       if (e.key === 'Escape') {
         setSelectedObjects([]);
         useWhiteboardStore.getState().setShowPenSettings(false);
@@ -863,8 +888,7 @@ const Canvas: React.FC = () => {
         useWhiteboardStore.getState().setShowMainMenu(false);
         return;
       }
-      
-      // Tool shortcuts
+
       if (!ctrl) {
         switch (e.key.toLowerCase()) {
           case 'p': useWhiteboardStore.getState().setCurrentTool('pen'); break;
@@ -878,20 +902,20 @@ const Canvas: React.FC = () => {
         }
       }
     };
-    
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedObjectIds, editingText]);
 
-  // Center the canvas initially
+  // Center initial view
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
     setViewTransform({
       offsetX: rect.width / 2,
       offsetY: rect.height / 2,
-      zoom: 0.8,
+      zoom: 1,
     });
   }, []);
 
@@ -910,24 +934,51 @@ const Canvas: React.FC = () => {
   return (
     <div
       ref={containerRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
       style={{
         position: 'absolute',
         inset: 0,
         overflow: 'hidden',
         cursor: getCursor(),
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
       }}
     >
+      {/* Base Canvas: Background + Infinite Grid + Committed Objects (re-rendered on demand only) */}
       <canvas
-        ref={canvasRef}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
+        ref={baseCanvasRef}
         style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
           display: 'block',
-          touchAction: 'none',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* Active Canvas: Hardware-Accelerated Overlay for Current Pen Stroke & Marquee (60-120 FPS direct ink) */}
+      <canvas
+        ref={activeCanvasRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          willChange: 'transform',
+          transform: 'translateZ(0)',
+          pointerEvents: 'none',
         }}
       />
     </div>

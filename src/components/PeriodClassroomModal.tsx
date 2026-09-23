@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useWhiteboardStore } from '../store/useStore';
 import {
+  X,
   GraduationCap,
-  Clock,
-  Layers,
   ChevronRight,
-  Sparkles,
   AlertCircle,
   Loader2,
-  LogIn,
+  BookOpen,
+  Info,
+  Plus,
 } from 'lucide-react';
 import type { ClassroomCourse } from '../types';
 import {
@@ -18,6 +18,17 @@ import {
   setStoredAccessToken,
 } from '../services/googleClassroom';
 
+const PRESET_SUBJECTS = [
+  'English',
+  'Mathematics',
+  'Physics',
+  'Chemistry',
+  'Biology',
+  'Computer Science',
+  'Social Studies',
+  'Tamil',
+];
+
 export const PeriodClassroomModal: React.FC = () => {
   const {
     periodSlot,
@@ -25,10 +36,12 @@ export const PeriodClassroomModal: React.FC = () => {
     settings,
     updateSettings,
     selectPeriodClassroom,
+    dismissPeriodModal,
   } = useWhiteboardStore();
 
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [customSubject, setCustomSubject] = useState('');
 
   if (!periodSlot || periodSlot.type !== 'period') {
     return null;
@@ -39,6 +52,25 @@ export const PeriodClassroomModal: React.FC = () => {
   const activeCourseId = periodSession.activeCourse?.id;
 
   const handleSelectCourse = (course: ClassroomCourse) => {
+    selectPeriodClassroom(course, periodSlot);
+  };
+
+  const handleSelectPreset = (name: string) => {
+    const course: ClassroomCourse = {
+      id: `preset-${name.toLowerCase().replace(/\s+/g, '-')}`,
+      name,
+    };
+    selectPeriodClassroom(course, periodSlot);
+  };
+
+  const handleCustomSubjectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = customSubject.trim();
+    if (!trimmed) return;
+    const course: ClassroomCourse = {
+      id: `custom-${Date.now()}`,
+      name: trimmed,
+    };
     selectPeriodClassroom(course, periodSlot);
   };
 
@@ -80,113 +112,114 @@ export const PeriodClassroomModal: React.FC = () => {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(10, 12, 16, 0.78)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(0, 0, 0, 0.72)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
         padding: '16px',
-        animation: 'fadeIn 0.2s ease-out',
+        animation: 'fadeIn 0.15s ease-out',
       }}
+      onClick={dismissPeriodModal}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '560px',
-          background: 'linear-gradient(180deg, #1f2229 0%, #16181f 100%)',
-          borderRadius: '18px',
+          maxWidth: '520px',
+          background: '#1a1b20',
+          borderRadius: '14px',
           border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.65), 0 0 1px 1px rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.65)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '90vh',
         }}
       >
-        {/* Header Banner */}
+        {/* Header */}
         <div
           style={{
-            padding: '24px 28px 20px',
-            background: 'linear-gradient(135deg, rgba(30, 142, 62, 0.22) 0%, rgba(26, 115, 232, 0.18) 100%)',
+            padding: '18px 24px',
             borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: '#16171c',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-            <span
+          <div>
+            <h2
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                background: 'rgba(34, 197, 94, 0.2)',
-                color: '#4ade80',
-                fontSize: '12px',
+                fontSize: '16px',
                 fontWeight: 600,
-                letterSpacing: '0.3px',
-                border: '1px solid rgba(34, 197, 94, 0.35)',
+                color: '#ffffff',
+                margin: 0,
+                letterSpacing: '-0.2px',
               }}
             >
-              <Clock size={13} />
-              {periodSlot.startTime} – {periodSlot.endTime}
-            </span>
-            <span
+              Select Classroom
+            </h2>
+            <div
               style={{
-                color: '#94a3b8',
                 fontSize: '12px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
+                color: '#94a3b8',
+                marginTop: '3px',
               }}
             >
-              <Layers size={13} />
-              {periodSlot.name}
-            </span>
+              {periodSlot.name} • {periodSlot.startTime} – {periodSlot.endTime}
+            </div>
           </div>
 
-          <h2
+          <button
+            onClick={dismissPeriodModal}
             style={{
-              fontSize: '22px',
-              fontWeight: 700,
-              color: '#ffffff',
-              margin: '0 0 6px 0',
-              letterSpacing: '-0.3px',
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              padding: '6px',
+              borderRadius: '6px',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
             }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#ffffff';
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.background = 'transparent';
+            }}
+            title="Close"
           >
-            <GraduationCap size={24} style={{ color: '#4ade80' }} />
-            Select a Classroom to Continue
-          </h2>
-
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', lineHeight: '1.45' }}>
-            Choose the course for <strong>{periodSlot.name}</strong>. Notes written during this period will be automatically saved and published to the selected classroom.
-          </p>
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Course List Section */}
+        {/* Modal Body */}
         <div
           style={{
-            padding: '20px 28px',
+            padding: '20px 24px',
             overflowY: 'auto',
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '18px',
           }}
         >
           {authError && (
             <div
               style={{
                 padding: '10px 14px',
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
                 borderRadius: '8px',
-                color: '#f87171',
+                color: '#fca5a5',
                 fontSize: '12px',
                 display: 'flex',
                 alignItems: 'center',
@@ -198,217 +231,346 @@ export const PeriodClassroomModal: React.FC = () => {
             </div>
           )}
 
-          {courses.length > 0 ? (
-            <>
+          {/* Section: Standard Subjects for quick IFP one-tap selection */}
+          <div>
+            <div
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.6px',
+                color: '#64748b',
+                marginBottom: '10px',
+              }}
+            >
+              Quick Select Subject
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '8px',
+              }}
+            >
+              {PRESET_SUBJECTS.map((subjectName) => {
+                const isSelected =
+                  periodSession.activeCourse?.name?.toLowerCase() === subjectName.toLowerCase();
+
+                return (
+                  <button
+                    key={subjectName}
+                    onClick={() => handleSelectPreset(subjectName)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '10px 14px',
+                      background: isSelected
+                        ? 'rgba(255, 255, 255, 0.1)'
+                        : 'rgba(255, 255, 255, 0.04)',
+                      border: isSelected
+                        ? '1px solid rgba(255, 255, 255, 0.25)'
+                        : '1px solid rgba(255, 255, 255, 0.07)',
+                      borderRadius: '8px',
+                      color: isSelected ? '#ffffff' : '#e2e8f0',
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 600 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.12s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.07)';
+                      }
+                    }}
+                  >
+                    <BookOpen size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                    <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {subjectName}
+                    </span>
+                    {isSelected && (
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: '#52b788',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Subject Input */}
+            <form
+              onSubmit={handleCustomSubjectSubmit}
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginTop: '10px',
+              }}
+            >
+              <input
+                type="text"
+                value={customSubject}
+                onChange={(e) => setCustomSubject(e.target.value)}
+                placeholder="Or type custom subject..."
+                style={{
+                  flex: 1,
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="submit"
+                disabled={!customSubject.trim()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: customSubject.trim() ? '#242b35' : 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  borderRadius: '8px',
+                  padding: '8px 14px',
+                  color: customSubject.trim() ? '#ffffff' : '#64748b',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: customSubject.trim() ? 'pointer' : 'default',
+                  transition: 'all 0.12s ease',
+                }}
+              >
+                <Plus size={14} /> Set
+              </button>
+            </form>
+          </div>
+
+          {/* Section: Google Classroom Integration */}
+          <div
+            style={{
+              paddingTop: '16px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '10px',
+              }}
+            >
               <div
                 style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   textTransform: 'uppercase',
                   letterSpacing: '0.6px',
                   color: '#64748b',
-                  marginBottom: '2px',
                 }}
               >
-                Available Classes ({courses.length})
+                Google Classroom Sync
               </div>
+              {isConnected && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: '#86efac',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  ● Connected ({settings.googleClassroom?.email})
+                </span>
+              )}
+            </div>
 
-              {courses.map((course) => {
-                const isSelectedConsecutive = activeCourseId === course.id;
-                const courseColor = course.color || '#1a73e8';
-
-                return (
-                  <button
-                    key={course.id}
-                    onClick={() => handleSelectCourse(course)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '14px',
-                      padding: '14px 18px',
-                      background: isSelectedConsecutive
-                        ? 'rgba(34, 197, 94, 0.08)'
-                        : 'rgba(255, 255, 255, 0.03)',
-                      border: isSelectedConsecutive
-                        ? '1.5px solid rgba(34, 197, 94, 0.45)'
-                        : '1px solid rgba(255, 255, 255, 0.07)',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      transition: 'all 0.15s ease',
-                      outline: 'none',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = isSelectedConsecutive
-                        ? 'rgba(34, 197, 94, 0.14)'
-                        : 'rgba(255, 255, 255, 0.07)';
-                      e.currentTarget.style.borderColor = isSelectedConsecutive
-                        ? '#4ade80'
-                        : 'rgba(255, 255, 255, 0.2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = isSelectedConsecutive
-                        ? 'rgba(34, 197, 94, 0.08)'
-                        : 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.borderColor = isSelectedConsecutive
-                        ? 'rgba(34, 197, 94, 0.45)'
-                        : 'rgba(255, 255, 255, 0.07)';
-                    }}
-                  >
-                    {/* Course Color Pill */}
-                    <div
+            {courses.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {courses.map((course) => {
+                  const isSelected = activeCourseId === course.id;
+                  return (
+                    <button
+                      key={course.id}
+                      onClick={() => handleSelectCourse(course)}
                       style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '10px',
-                        backgroundColor: courseColor,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#ffffff',
-                        fontWeight: 700,
-                        fontSize: '17px',
-                        flexShrink: 0,
-                        boxShadow: `0 4px 12px ${courseColor}40`,
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        background: isSelected
+                          ? 'rgba(255, 255, 255, 0.09)'
+                          : 'rgba(255, 255, 255, 0.03)',
+                        border: isSelected
+                          ? '1px solid rgba(255, 255, 255, 0.22)'
+                          : '1px solid rgba(255, 255, 255, 0.07)',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.12s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                        }
                       }}
                     >
-                      {course.name.charAt(0).toUpperCase()}
-                    </div>
-
-                    {/* Course Details */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          marginBottom: '3px',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '15px',
-                            fontWeight: 600,
-                            color: '#ffffff',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {course.name}
-                        </span>
-                        {isSelectedConsecutive && (
-                          <span
-                            style={{
-                              fontSize: '11px',
-                              background: 'rgba(34, 197, 94, 0.2)',
-                              color: '#4ade80',
-                              padding: '2px 8px',
-                              borderRadius: '10px',
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            Continuous Session
-                          </span>
-                        )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <GraduationCap size={16} style={{ color: '#94a3b8' }} />
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
+                            {course.name}
+                          </div>
+                          {(course.section || course.room) && (
+                            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>
+                              {[course.section, course.room].filter(Boolean).join(' • ')}
+                            </div>
+                          )}
+                        </div>
                       </div>
-
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          color: '#94a3b8',
-                          display: 'flex',
-                          gap: '12px',
-                        }}
-                      >
-                        {course.section && <span>Sec: {course.section}</span>}
-                        {course.room && <span>Room: {course.room}</span>}
-                        {!course.section && !course.room && <span>Google Classroom Course</span>}
-                      </div>
-                    </div>
-
-                    <ChevronRight size={18} style={{ color: '#64748b' }} />
-                  </button>
-                );
-              })}
-            </>
-          ) : (
-            <div
-              style={{
-                padding: '24px',
-                textAlign: 'center',
-                background: 'rgba(255, 255, 255, 0.02)',
-                borderRadius: '12px',
-                border: '1px dashed rgba(255, 255, 255, 0.1)',
-              }}
-            >
-              <GraduationCap size={36} style={{ color: '#64748b', margin: '0 auto 12px' }} />
-              <div style={{ fontSize: '14px', fontWeight: 600, color: '#fff', marginBottom: '6px' }}>
-                No Google Classroom Connected
+                      <ChevronRight size={15} style={{ color: '#64748b' }} />
+                    </button>
+                  );
+                })}
               </div>
-              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 16px 0', lineHeight: '1.4' }}>
-                Sign in to your Google Classroom account to automatically sync your lecture courses, or add default classroom subjects below.
-              </p>
-
-              <button
-                onClick={handleGoogleSignIn}
-                disabled={isAuthenticating}
+            ) : (
+              <div
                 style={{
-                  display: 'inline-flex',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  background: 'linear-gradient(135deg, #1e8e3e 0%, #137333 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  padding: '10px 18px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  cursor: isAuthenticating ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 4px 12px rgba(30, 142, 62, 0.3)',
+                  justifyContent: 'space-between',
+                  gap: '14px',
                 }}
               >
-                {isAuthenticating ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
-                {isAuthenticating ? 'Connecting to Google...' : 'Sign In with Google Classroom'}
-              </button>
-            </div>
-          )}
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: '#f1f5f9' }}>
+                    Connect Google Classroom
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                    Sync student stream courses to automatically upload period notes.
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={isAuthenticating}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: '#ffffff',
+                    border: '1px solid #dadce0',
+                    borderRadius: '6px',
+                    color: '#3c4043',
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: isAuthenticating ? 'not-allowed' : 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  {isAuthenticating ? (
+                    <Loader2 size={14} className="animate-spin" color="#3c4043" />
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.66v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.15z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                      />
+                    </svg>
+                  )}
+                  <span>Sign in with Google</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Footer info & options */}
+        {/* Footer */}
         <div
           style={{
-            padding: '16px 28px',
-            background: 'rgba(0, 0, 0, 0.25)',
-            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            padding: '12px 24px',
+            background: '#15161a',
+            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b' }}>
-            <Sparkles size={14} style={{ color: '#38bdf8' }} />
-            <span>Consecutive periods for the same class are combined automatically.</span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '11px',
+              color: '#64748b',
+            }}
+          >
+            <Info size={13} />
+            <span>Consecutive periods for the same subject merge notes automatically.</span>
           </div>
 
-          {!isConnected && (
-            <button
-              onClick={handleGoogleSignIn}
-              disabled={isAuthenticating}
-              style={{
-                background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '6px',
-                color: '#cbd5e1',
-                padding: '6px 12px',
-                fontSize: '11px',
-                cursor: 'pointer',
-              }}
-            >
-              Connect Google
-            </button>
-          )}
+          <button
+            onClick={dismissPeriodModal}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: '12px',
+              cursor: 'pointer',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              transition: 'color 0.12s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#ffffff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#94a3b8';
+            }}
+          >
+            Skip for now
+          </button>
         </div>
       </div>
     </div>

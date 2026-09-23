@@ -212,11 +212,11 @@ const SettingsDialog: React.FC = () => {
         {/* Google Classroom Integration */}
         <div style={sectionStyle}>
           <div style={{ ...sectionTitleStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#4ade80' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#cbd5e1' }}>
               <GraduationCap size={16} /> Google Classroom
             </span>
             {settings.googleClassroom?.isConnected && (
-              <span style={{ fontSize: '11px', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', padding: '2px 8px', borderRadius: '10px', fontWeight: 500 }}>
+              <span style={{ fontSize: '11px', background: 'rgba(255, 255, 255, 0.08)', color: '#86efac', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '2px 8px', borderRadius: '10px', fontWeight: 500 }}>
                 ● Connected
               </span>
             )}

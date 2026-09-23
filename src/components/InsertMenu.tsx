@@ -121,11 +121,12 @@ const InsertMenu: React.FC = () => {
       bottom: '80px',
       left: '50%',
       transform: 'translateX(-50%)',
-      background: '#2a2b2e',
-      border: '1px solid #444',
-      borderRadius: '12px',
+      background: 'rgba(24, 27, 34, 0.98)',
+      border: '1px solid rgba(255, 255, 255, 0.14)',
+      borderRadius: '14px',
       padding: '8px',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)',
+      backdropFilter: 'blur(20px)',
       zIndex: 200,
       minWidth: '180px',
     }}>
@@ -142,7 +143,7 @@ const InsertMenu: React.FC = () => {
             background: 'transparent',
             border: 'none',
             borderRadius: '8px',
-            color: '#ccc',
+            color: '#e2e8f0',
             fontSize: '13px',
             cursor: 'pointer',
             outline: 'none',
@@ -150,13 +151,13 @@ const InsertMenu: React.FC = () => {
             textAlign: 'left',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#3a3b3e';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'transparent';
           }}
         >
-          <span style={{ color: '#999' }}>{item.icon}</span>
+          <span style={{ color: '#94a3b8' }}>{item.icon}</span>
           {item.label}
         </button>
       ))}
@@ -170,7 +171,7 @@ const InsertMenu: React.FC = () => {
         height: 0,
         borderLeft: '8px solid transparent',
         borderRight: '8px solid transparent',
-        borderTop: '8px solid #2a2b2e',
+        borderTop: '8px solid rgba(24, 27, 34, 0.98)',
       }} />
     </div>
   );

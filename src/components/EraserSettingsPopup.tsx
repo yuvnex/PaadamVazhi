@@ -18,11 +18,12 @@ const EraserSettingsPopup: React.FC = () => {
       bottom: '80px',
       left: '50%',
       transform: 'translateX(-50%)',
-      background: '#2a2b2e',
-      border: '1px solid #444',
-      borderRadius: '12px',
+      background: 'rgba(24, 27, 34, 0.98)',
+      border: '1px solid rgba(255, 255, 255, 0.14)',
+      borderRadius: '14px',
       padding: '0',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      boxShadow: '0 12px 36px rgba(0, 0, 0, 0.6)',
+      backdropFilter: 'blur(20px)',
       zIndex: 200,
       minWidth: '200px',
       overflow: 'hidden',
@@ -33,9 +34,9 @@ const EraserSettingsPopup: React.FC = () => {
         alignItems: 'center',
         gap: '8px',
         padding: '10px 16px',
-        borderBottom: '1px solid #3a3b3e',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
       }}>
-        <Eraser size={18} color="#4A90D9" />
+        <Eraser size={18} color="#38bdf8" />
         <span style={{ color: '#fff', fontSize: '13px', fontWeight: 500 }}>Eraser</span>
       </div>
 
@@ -53,10 +54,10 @@ const EraserSettingsPopup: React.FC = () => {
               onClick={() => setEraserSize(s.id)}
               style={{
                 padding: '8px 12px',
-                background: eraserSize === s.id ? '#3a3b3e' : 'transparent',
-                border: eraserSize === s.id ? '1px solid #4A90D9' : '1px solid #444',
+                background: eraserSize === s.id ? 'rgba(56, 189, 248, 0.16)' : 'transparent',
+                border: eraserSize === s.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: '8px',
-                color: eraserSize === s.id ? '#fff' : '#999',
+                color: eraserSize === s.id ? '#38bdf8' : '#9ca3af',
                 fontSize: '11px',
                 cursor: 'pointer',
                 outline: 'none',
