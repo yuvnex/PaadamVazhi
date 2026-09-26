@@ -317,6 +317,3 @@ To use your institution's own Google Cloud Project:
 
 ---
 
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
