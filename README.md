@@ -1,4 +1,4 @@
-# PaadamVazhi (பாடவழி)
+# PaadamVazhi
 
 <p align="center">
   <img src="public/app-logo.png" alt="PaadamVazhi Logo" width="128" height="128" />
