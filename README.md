@@ -40,7 +40,7 @@
   - [Linting & Type Checking](#linting--type-checking)
 - [Building Android APK](#-building-android-apk)
 - [Google Classroom & OAuth Configuration](#-google-classroom--oauth-configuration)
-- [License](#-license)
+
 
 ---
 
