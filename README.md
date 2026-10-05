@@ -313,7 +313,7 @@ To use your institution's own Google Cloud Project:
    - `http://localhost:8080` (for Android Native Loopback Bridge)
    - `https://localhost` (for Web testing)
    - Your production web URL (if deployed online)
-5. In PaadamVazhi, navigate to **Settings** → **Google Classroom** and enter your custom Client ID.
+
 
 ---
 
